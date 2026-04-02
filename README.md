@@ -136,7 +136,7 @@ OpenClaw's architecture can be characterised as follows:
 - **Key insight:** The Gateway acknowledges requests immediately and delivers responses as a stream of events. This decouples message receipt from message processing and supports long-running agent tasks natively.
 
 # OpenClaw Runtime Behavior
-
+![Sequence diagram](images/OpenClaw%20Runtime%20Behavior%20Sequence%20diagram.png)
 ## The four actors
 
 A user sends a message on WhatsApp (or Telegram, or web). It hits the **Gateway**, which is the central hub. The Gateway talks to the **Agent** (the AI brain), and the Agent can call out to **Tools or Nodes** (like a camera, canvas, or screen recorder) to do things.
