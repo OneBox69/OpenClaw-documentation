@@ -134,3 +134,72 @@ OpenClaw's architecture can be characterised as follows:
 - **Transport:** Persistent WebSocket, JSON text frames
 - **Interaction model:** Asynchronous, streaming — not synchronous request-response
 - **Key insight:** The Gateway acknowledges requests immediately and delivers responses as a stream of events. This decouples message receipt from message processing and supports long-running agent tasks natively.
+
+OpenClaw Runtime Behavior
+The four actors
+A user sends a message on WhatsApp (or Telegram, or web). It hits the Gateway, which is the central hub. The Gateway talks to the Agent (the AI brain), and the Agent can call out to Tools or Nodes (like a camera, canvas, or screen recorder) to do things.
+[User / Messaging Platform] ──> [Gateway] ──> [Agent] ──> [Tools / Nodes]
+
+The key insight: this is not HTTP
+The naive assumption is that OpenClaw works like a normal HTTP API — you send a request, you wait, you get one response back. It does not work that way.
+HTTP (conventional):
+Client  ──── req ────>  Server
+Client  <─── res ────   Server
+        (one request, one response, connection closes)
+OpenClaw (WebSocket + EDA):
+Client  ──── req:agent ──────────────>  Gateway
+Client  <─── ack (accepted) ───────────  Gateway
+Client  <╌╌╌ event:agent (chunk 1) ───  Gateway
+Client  <╌╌╌ event:agent (chunk 2) ───  Gateway
+Client  <╌╌╌ event:agent (chunk N) ───  Gateway
+Client  <─── completion metadata ──────  Gateway
+        (one request, many events, connection stays open)
+The Gateway keeps the WebSocket connection open and streams multiple events back to the client. The AI's response arrives in chunks — like watching someone type in real time. It is not "ask and hang up," it is "stay on the line."
+
+The full connection lifecycle
+This is the complete sequence from the moment a client connects until the conversation is done.
+Client                      Gateway                    Agent / Tool
+  │                            │                            │
+  │  ── Phase 1: Connect ──────────────────────────────     │
+  │                            │                            │
+  │── req:connect ────────────>│                            │
+  │   (role: "node")           │                            │
+  │<─ res(ok) ─────────────────│                            │
+  │                            │                            │
+  │  ── Phase 2: Alive ────────────────────────────────     │
+  │                            │                            │
+  │<─ event:presence ──────────│  (who else is online)      │
+  │<─ event:tick ──────────────│  (heartbeat, ongoing)      │
+  │                            │                            │
+  │  ── Phase 3: Request ──────────────────────────────     │
+  │                            │                            │
+  │── req:agent ──────────────>│                            │
+  │<─ ack (accepted) ──────────│  ← not the answer          │
+  │                            │── invoke agent ───────────>│
+  │                            │   (+ tool/node calls)      │
+  │                            │<─ result ──────────────────│
+  │                            │                            │
+  │  ── Phase 4: Stream ───────────────────────────────     │
+  │                            │                            │
+  │<╌╌ event:agent (chunk 1) ──│                            │
+  │<╌╌ event:agent (chunk 2) ──│                            │
+  │<╌╌ event:agent (chunk N) ──│                            │
+  │                            │                            │
+  │  ── Phase 5: Done ─────────────────────────────────     │
+  │                            │                            │
+  │<─ completion metadata ─────│  (token count, timing…)    │
+  │                            │                            │
+  │        [WebSocket stays open for next message]          │
+Phase 1 — Connect
+Before anything happens, the client opens a WebSocket connection to the Gateway. It sends req:connect and includes role: "node" to identify itself. The Gateway validates this and responds with res(ok). The connection is now established and stays open.
+Phase 2 — Alive
+Once connected, the Gateway starts sending background events without being asked. event:presence tells the client who else is online. event:tick is a heartbeat — a "still here?" pulse that keeps the connection alive. This happens continuously in the background, not in response to any user action.
+Phase 3 — Request
+The user sends a message. The client packages it as req:agent and sends it over the WebSocket. The Gateway immediately replies with an ack saying "accepted" — this is not the answer, it is confirmation that the request was received. The Gateway then forwards it to the Agent for processing. If the Agent needs external information, it calls a Tool or Node and waits for the result.
+Phase 4 — Stream
+The Agent's response does not come back as one large payload. The Gateway streams it as multiple event:agent messages — chunk by chunk. The user sees the response building in real time, word by word.
+Phase 5 — Done
+When the Agent finishes, the Gateway sends a final completion message with metadata (token count, timing, etc.). The WebSocket connection stays open for the next message.
+
+Transport
+The transport layer is WebSocket with JSON text frames throughout. Every arrow in the sequence diagram above is a JSON object flowing over a single persistent connection. There is no HTTP polling, no connection teardown between messages, no single-response model.
