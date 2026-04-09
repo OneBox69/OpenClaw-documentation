@@ -237,3 +237,75 @@ When the Agent finishes, the Gateway sends a final completion message with metad
 ## Transport
 
 The transport layer is **WebSocket with JSON text frames** throughout. Every arrow in the sequence diagram above is a JSON object flowing over a single persistent connection. There is no HTTP polling, no connection teardown between messages, no single-response model.
+
+## Deployment,Trust Boundaries and Security
+This deployment diagram outlines a highly secure, multi-tier microservices architecture for the OpenClaw application. It is designed around the principle of "Defense in Depth" and a Zero Trust model, separating different components into distinct network zones (Trust Boundaries) to minimize the attack surface.
+
++-----------------------+                    +---------------------------+
+| UserDevice [Zone=Internet]|                    | PublicGateway [Zone=DMZ]  |
+|                       |                    |                           |
+|  +----------------+   | <<HTTPS/TLS 1.3>>   | +-----------------------+ |
+|  | Web Browser    | - - - - - - - - - - - - > | API Gateway/              |
+|  +----------------+   |                    | Load Balancer           | |
+|                       |                    | +-----------------------+ |
+|  +----------------+   |                    |                           |
+|  | Mobile App     |   |                    +---------------------------+
+|  +----------------+   |                                  |
+|                       |                                  | <<Authenticated internal RPC>>
++-----------------------+                                  V
+                                                +-------------------------------+
+                                                | MicroservicesCluster [Zone=SecureOpenClawVNET] |
+                                                |                               |
+                                                | +---------------------------+ |
+                                                | | MicroservicesRuntime      | |
+                                                | |                           | |
+                                                | |  +---------+ +---------+  | |
+                                                | |  | Auth    | | Secrets  |  | |
+                                                | |  | Service | | Mgr      |  | |
+                                                | |  +---------+ +---------+  | |
+                                                | |      ^           ^        | |
+                                                | |      |<<mTLS>>    |<<mTLS>> | |
+                                                | |      v           v        | |
+                                                | |  +-----------------------+ | |
+                                                | |  | Core App Backend      | | |
+                                                | |  +-----------------------+ | |
+                                                | +---------------------------+ |
+                                                +-------------------------------+
+                                                                  |
+                                                                  | <<IAM Auth/TDE>>
+                                                                  V
+                                                      +---------------------------+
+                                                      | DataServer [Zone=DataTierSubnet] |
+                                                      |                           |
+                                                      |  +---------------------+  |
+                                                      |  | OpenClaw DB [Isolated]|  |
+                                                      |  +---------------------+  |
+                                                      |                           |
+                                                      +---------------------------+
+
+## 1. Network Segmentation & Trust Zones
+
+The architecture is divided into four distinct tiers, each with increasing levels of security:
+
+- **Internet Zone (Untrusted):** Represented by the **UserDevice**. This is where the client-side applications (Web Browser and Mobile App) reside. Since this environment is outside the organization's control, it is treated as entirely untrusted.
+- **DMZ (Semi-Trusted):** The **PublicGateway** acts as a buffer between the public internet and the internal network. It houses the API Gateway/Load Balancer, which is the only entry point for external traffic.
+- **Secure OpenClaw VNET (Trusted):** This is a private network containing the **MicroservicesCluster**. It is shielded from the internet and only accepts traffic that has been validated by the gateway.
+- **Data Tier Subnet (Highly Trusted):** The most isolated layer. The **DataServer** is placed here to ensure that the database is not directly reachable by anything other than the application backend.
+
+## 2. Secure Communication Protocols
+
+The arrows in your diagram define the specific "language" and "security handshake" used between devices:
+
+- **HTTPS/TLS 1.3:** External traffic from the user's device to the gateway is encrypted using the latest TLS standard to prevent eavesdropping or man-in-the-middle attacks.
+- **Authenticated Internal RPC:** Once inside the perimeter, the gateway communicates with the microservices using a private, authenticated Remote Procedure Call (RPC) mechanism.
+- **mTLS (Mutual TLS):** Within the **MicroservicesRuntime**, the Auth Service, Secrets Manager, and Core App Backend use two-way encryption. This ensures that every service must prove its identity to the others before exchanging data.
+- **IAM Auth & TDE:** Connection to the **OpenClaw DB** is secured via Identity and Access Management (IAM) roles rather than simple passwords. Furthermore, Transparent Data Encryption (TDE) ensures the data is encrypted "at rest" on the disk.
+
+- ### 3. Internal Logic & Instance Specification
+
+This section covers the "brains" and the "vault" of the system, along with the specific UML grammar that brings them to life.
+
+- **Microservices Runtime (`<<execution environment>>`):** This serves as the operational brain of OpenClaw. By housing the **Core App Backend**, **Auth Service**, and **Secrets Mgr** within a single logical runtime, the system can enforce strict **mTLS** communication internally. This ensures that sensitive tasks—like retrieving credentials or verifying a user's identity—are decoupled from the main app logic and never "leak" to the outer, less-trusted layers.
+- **The Instance Marker (`:`):** You’ll notice the labels start with a colon (e.g., `:DataServer` or `:UserDevice`). In UML, this colon is the "Instance" marker. It signifies that the diagram isn't just a generic blueprint of a *type* of server; it represents a **specific, live instance** of that device currently running in the OpenClaw environment. It’s the difference between looking at a car's manual and looking at the specific car parked in your driveway.
+- **Isolated Database Instance:** The `{Isolated}` property marks this as the vault. It sits within the **Data Tier Subnet**, meaning it has no public IP address and is physically and logically separated from the application tier. This fulfills the requirement for "stricter access" by ensuring the data can only be reached by authenticated requests from the backend.
+
