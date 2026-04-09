@@ -283,7 +283,17 @@ This deployment diagram outlines a highly secure, multi-tier microservices archi
                                                       |                           |
                                                       +---------------------------+
 ```
-## 1. Network Segmentation & Trust Zones
+## 1.Deployment Overview
+```
+| Trust Boundary | Example Threat | Risk | Security Control |
+| --- | --- | --- | --- |
+| UserDevice → PublicGateway | MITM, token theft, malicious requests | Unauthorized access, data interception | TLS 1.3, HSTS, input validation, WAF |
+| PublicGateway → MicroservicesCluster | Forged internal calls, replay attacks | Service impersonation | mTLS, short-lived service identity, signed requests |
+| Microservices → Database | Over-privileged queries, injection | Data leakage or corruption | IAM DB auth, parameterized queries, least-privilege DB roles |
+| Admin → Management Plane | Privilege abuse, stolen admin credentials | Full system compromise | MFA, RBAC, audit logging, IP allowlisting |
+| Service → Secrets Manager | Secret exfiltration | System-wide compromise | Access policies, rotation, audit trail, short-lived credentials |
+```
+## 2. Network Segmentation & Trust Zones
 
 The architecture is divided into four distinct tiers, each with increasing levels of security:
 
@@ -292,7 +302,7 @@ The architecture is divided into four distinct tiers, each with increasing level
 - **Secure OpenClaw VNET (Trusted):** This is a private network containing the **MicroservicesCluster**. It is shielded from the internet and only accepts traffic that has been validated by the gateway.
 - **Data Tier Subnet (Highly Trusted):** The most isolated layer. The **DataServer** is placed here to ensure that the database is not directly reachable by anything other than the application backend.
 
-## 2. Secure Communication Protocols
+## 3. Secure Communication Protocols
 
 The arrows in your diagram define the specific "language" and "security handshake" used between devices:
 
@@ -301,7 +311,30 @@ The arrows in your diagram define the specific "language" and "security handshak
 - **mTLS (Mutual TLS):** Within the **MicroservicesRuntime**, the Auth Service, Secrets Manager, and Core App Backend use two-way encryption. This ensures that every service must prove its identity to the others before exchanging data.
 - **IAM Auth & TDE:** Connection to the **OpenClaw DB** is secured via Identity and Access Management (IAM) roles rather than simple passwords. Furthermore, Transparent Data Encryption (TDE) ensures the data is encrypted "at rest" on the disk.
 
-- ### 3. Internal Logic & Instance Specification
+## 4. Authentication and Authorization
+
+### 4.1 Authentication
+
+Authentication in OpenClaw verifies the identity of users, services, and privileged operators before access is granted. End users authenticate through the Auth Service, which validates submitted credentials and issues a session or access token for subsequent requests. These tokens are then validated by the PublicGateway before protected requests are forwarded internally. For privileged administrative access, stronger controls such as multi-factor authentication should be applied due to the higher risk associated with administrative accounts. OWASP recommends strong authentication controls and tighter protection for sensitive accounts, while NIST zero-trust guidance emphasizes verifying identity for each access request rather than relying on network location alone.
+
+Within the private environment, service-to-service authentication is enforced using mutual TLS (mTLS). This ensures that each microservice proves its identity before it can communicate with another internal component. As a result, internal traffic is not implicitly trusted simply because it originates from inside the OpenClaw VNET. Backend access to the database is also tied to approved service identities through IAM-based authentication, reducing reliance on static shared credentials.
+
+### 4.2 Authorization
+
+Authorization determines what an authenticated identity is allowed to do after it has been verified. OpenClaw should follow a deny-by-default model, where access is only granted when an explicit rule permits it. Permissions should also follow the principle of least privilege, meaning that each user, service, or administrator receives only the minimum level of access required for its role. OWASP’s authorization guidance recommends validating permissions on every request and avoiding broad, implicit trust relationships.
+
+For end users, authorization should ensure that a user can access only their own records and permitted application functions. This helps prevent broken object-level authorization, where a user might attempt to access another user’s data by modifying request parameters. Administrative operations should be separately protected through function-level authorization so that only approved privileged roles can invoke sensitive endpoints. Internal services should also be authorized individually, ensuring that even a valid internal service can only call the APIs, secrets, and database resources specifically assigned to it.
+```
+| Identity / Role | Authentication Method | Allowed Access | Restrictions |
+| --- | --- | --- | --- |
+| Guest User | None / public access | Public content and unauthenticated endpoints only | No access to protected APIs |
+| Authenticated User | Token issued by Auth Service | Own profile, own application data, normal user functions | Cannot access admin endpoints or other users’ records |
+| Admin | Strong authentication with MFA | Administrative dashboard, audit views, privileged operations | Actions are logged and subject to tighter monitoring |
+| Core App Backend | mTLS and service identity | Internal business logic, approved database operations | No direct public access; least-privilege DB permissions only |
+| Auth Service | mTLS and service identity | Credential validation, token issuance, token verification | Cannot perform unrelated business operations |
+| Secrets Manager | Internal identity controls | Provides secrets to approved services only | Secret access is scoped, logged, and not exposed publicly |
+```
+- ### 5. Internal Logic & Instance Specification
 
 This section covers the "brains" and the "vault" of the system, along with the specific UML grammar that brings them to life.
 
