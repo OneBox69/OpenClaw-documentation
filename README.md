@@ -283,8 +283,9 @@ This deployment diagram outlines a highly secure, multi-tier microservices archi
                                                       |                           |
                                                       +---------------------------+
 ```
+---
 ## 1.Deployment Overview
-```
+
 | Trust Boundary | Example Threat | Risk | Security Control |
 | --- | --- | --- | --- |
 | UserDevice → PublicGateway | MITM, token theft, malicious requests | Unauthorized access, data interception | TLS 1.3, HSTS, input validation, WAF |
@@ -292,7 +293,7 @@ This deployment diagram outlines a highly secure, multi-tier microservices archi
 | Microservices → Database | Over-privileged queries, injection | Data leakage or corruption | IAM DB auth, parameterized queries, least-privilege DB roles |
 | Admin → Management Plane | Privilege abuse, stolen admin credentials | Full system compromise | MFA, RBAC, audit logging, IP allowlisting |
 | Service → Secrets Manager | Secret exfiltration | System-wide compromise | Access policies, rotation, audit trail, short-lived credentials |
-```
+---
 ## 2. Network Segmentation & Trust Zones
 
 The architecture is divided into four distinct tiers, each with increasing levels of security:
@@ -324,7 +325,8 @@ Within the private environment, service-to-service authentication is enforced us
 Authorization determines what an authenticated identity is allowed to do after it has been verified. OpenClaw should follow a deny-by-default model, where access is only granted when an explicit rule permits it. Permissions should also follow the principle of least privilege, meaning that each user, service, or administrator receives only the minimum level of access required for its role. OWASP’s authorization guidance recommends validating permissions on every request and avoiding broad, implicit trust relationships.
 
 For end users, authorization should ensure that a user can access only their own records and permitted application functions. This helps prevent broken object-level authorization, where a user might attempt to access another user’s data by modifying request parameters. Administrative operations should be separately protected through function-level authorization so that only approved privileged roles can invoke sensitive endpoints. Internal services should also be authorized individually, ensuring that even a valid internal service can only call the APIs, secrets, and database resources specifically assigned to it.
-```
+---
+## OpenClaw Access Control Policy Table
 | Identity / Role | Authentication Method | Allowed Access | Restrictions |
 | --- | --- | --- | --- |
 | Guest User | None / public access | Public content and unauthenticated endpoints only | No access to protected APIs |
@@ -333,7 +335,7 @@ For end users, authorization should ensure that a user can access only their own
 | Core App Backend | mTLS and service identity | Internal business logic, approved database operations | No direct public access; least-privilege DB permissions only |
 | Auth Service | mTLS and service identity | Credential validation, token issuance, token verification | Cannot perform unrelated business operations |
 | Secrets Manager | Internal identity controls | Provides secrets to approved services only | Secret access is scoped, logged, and not exposed publicly |
-```
+---
 - ### 5. Internal Logic & Instance Specification
 
 This section covers the "brains" and the "vault" of the system, along with the specific UML grammar that brings them to life.
