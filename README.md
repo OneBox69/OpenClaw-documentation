@@ -240,7 +240,7 @@ The transport layer is **WebSocket with JSON text frames** throughout. Every arr
 
 ## Deployment,Trust Boundaries and Security
 This deployment diagram outlines a highly secure, multi-tier microservices architecture for the OpenClaw application. It is designed around the principle of "Defense in Depth" and a Zero Trust model, separating different components into distinct network zones (Trust Boundaries) to minimize the attack surface.
-
+```
 +-----------------------+                    +---------------------------+
 | UserDevice [Zone=Internet]|                    | PublicGateway [Zone=DMZ]  |
 |                       |                    |                           |
@@ -282,7 +282,7 @@ This deployment diagram outlines a highly secure, multi-tier microservices archi
                                                       |  +---------------------+  |
                                                       |                           |
                                                       +---------------------------+
-
+```
 ## 1. Network Segmentation & Trust Zones
 
 The architecture is divided into four distinct tiers, each with increasing levels of security:
