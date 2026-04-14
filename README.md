@@ -2,7 +2,7 @@
 
 
 
-# OpenClaw Architecture Pattern
+## **OpenClaw Architecture Pattern**
 
 ## Pattern: Event-Driven Architecture (EDA) with Hub-and-Spoke Topology
 
@@ -238,7 +238,7 @@ When the Agent finishes, the Gateway sends a final completion message with metad
 
 The transport layer is **WebSocket with JSON text frames** throughout. Every arrow in the sequence diagram above is a JSON object flowing over a single persistent connection. There is no HTTP polling, no connection teardown between messages, no single-response model.
 
-## Deployment,Trust Boundaries and Security
+## **Deployment, Trust Boundaries, and Security**
 This deployment diagram outlines a highly secure, multi-tier microservices architecture for the OpenClaw application. It is designed around the principle of "Defense in Depth" and a Zero Trust model, separating different components into distinct network zones (Trust Boundaries) to minimize the attack surface.
 ```
 +-----------------------+                    +---------------------------+
