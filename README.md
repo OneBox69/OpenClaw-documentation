@@ -365,9 +365,9 @@ Based on what is generally expected for interactive web applications and conside
 | Database query time (P95) | Under 50ms | Assuming properly indexed tables and parameterized queries |
 | Full page load | Under 2 seconds | Standard usability threshold for web applications |
 | Sustained throughput | At least 500 requests/sec | Enough for moderate concurrent usage without degradation |
+---
 
 These are not arbitrary — the 300ms API target, for instance, has to account for roughly 30 to 80ms of pure security overhead that gets added before any actual work happens. That leaves around 220ms for the application logic and database queries, which is tight but achievable with proper optimization.
----
 
 ## 6.3 Where the Time Goes — Latency Across Trust Boundaries
 
@@ -420,9 +420,9 @@ It is worth being honest about the fact that some of our security controls have 
 | IAM database auth | ~3–5ms per query | Connection pooling, long-lived sessions |
 | TDE (encryption at rest) | ~1–3ms CPU per read | Hardware-accelerated AES-NI, proper indexing |
 | Parameterized queries | Essentially nothing | Also prevents SQL injection, so it is a win-win |
+---
 
 None of these trade-offs are deal-breakers, but ignoring them would be a mistake. The cumulative effect of "just a few milliseconds" at every layer adds up quickly when you have four trust boundaries in the request path.
----
 
 # 7. Scalability
 
