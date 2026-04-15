@@ -337,7 +337,7 @@ For end users, authorization should ensure that a user can access only their own
 | Auth Service | mTLS and service identity | Credential validation, token issuance, token verification | Cannot perform unrelated business operations |
 | Secrets Manager | Internal identity controls | Provides secrets to approved services only | Secret access is scoped, logged, and not exposed publicly |
 ---
-- ### 5. Internal Logic & Instance Specification
+## 5. Internal Logic & Instance Specification
 
 This section covers the "brains" and the "vault" of the system, along with the specific UML grammar that brings them to life.
 
