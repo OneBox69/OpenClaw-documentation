@@ -524,3 +524,215 @@ There are a few scenarios worth planning for:
 **Certificate provisioning delays** — If the system needs to scale quickly in response to a traffic spike, but certificate provisioning takes 30 seconds per instance, we could have a window where new instances are running but cannot communicate over mTLS. Pre-provisioning certificates or using short-lived tokens as a bootstrap mechanism can close this gap.
 
 **Uneven scaling** — If we scale the backend but not the Auth Service, token validation becomes the bottleneck. If we scale everything but not the database, the database becomes the bottleneck. The auto-scaling strategy needs to be monitored as a system, not component by component.
+
+---
+
+# Early Design Decisions
+
+This section documents the earliest architectural decisions made for OpenClaw. These three decisions were made before any code was written and they constrain everything that came after. Each decision is presented with the architectural pattern it implements, the quality attribute it is intended to address, and an individual pros-and-cons analysis tied back to those quality attributes.
+
+The structure follows Bass et al. — quality attributes are not afterthoughts, they are the prediction we make about the system based on the architectural decisions we choose.
+
+---
+
+## Decision D1 — Hub-and-Spoke Topology with the Gateway as the Hub
+
+### The decision
+
+The Gateway is the single point through which every participant in the system communicates. Clients, messaging platforms, nodes, agents, and tools all connect to the Gateway and only to the Gateway. No spoke ever talks directly to another spoke.
+
+### Pattern implemented
+
+**Hub-and-Spoke topology**, layered on top of an **Event-Driven Architecture (EDA)**. The Gateway is the central event broker; spokes are event producers and consumers.
+
+### Quality attribute addressed
+
+**Modifiability** (primary), **Integrability** (secondary).
+
+By forcing all communication through one hub, the cost of adding, removing, or replacing any spoke is local to that spoke and the Gateway — not spread across the system. A new messaging platform (Discord, Slack) can be added by writing one new connector to the Gateway, without touching any client, agent, or node. This is the modifiability tactic of *limiting dependencies* applied at the topology level.
+
+### Individual pros (tied to quality attributes)
+
+- **Modifiability** — Adding a new spoke is a local change. No other spoke needs to know it exists.
+- **Integrability** — The Gateway is the single integration surface. Third parties have one contract to learn, not N contracts.
+- **Observability** — Every message in the system passes through one place. Logging, tracing, and rate limiting can be enforced uniformly.
+- **Security** — Authentication, schema validation, and authorization are enforced at one boundary instead of being re-implemented per spoke.
+
+### Individual cons (tied to quality attributes)
+
+- **Availability** — The Gateway is a single point of failure. If the Gateway is down, the entire system is down. This is the direct cost of centralization.
+- **Performance** — Every message takes at least one extra hop through the Gateway, even when two spokes conceptually need to exchange information. There is no shortcut path.
+- **Scalability** — The Gateway is the first component that will saturate under load. Horizontal scaling of the Gateway requires sticky sessions or session-state externalization, which adds complexity.
+
+---
+
+## Decision D2 — Persistent WebSocket with JSON Frames as the Transport
+
+### The decision
+
+Every spoke maintains a single, long-lived WebSocket connection to the Gateway. All communication uses JSON text frames over that connection. There is no HTTP polling, no per-request connection setup, and no synchronous request-response model. Acknowledgments are returned immediately; actual results stream back as separate `event:agent` frames over the same connection.
+
+### Pattern implemented
+
+**Asynchronous messaging over a persistent duplex channel** — the transport-level realization of EDA. The connection itself is the channel; events are the messages.
+
+### Quality attribute addressed
+
+**Performance** (primary, specifically perceived latency), **Usability** (secondary).
+
+Streaming responses chunk-by-chunk lets the user see output as it is generated rather than waiting for the full response. For an AI assistant where a single response can take 10+ seconds to fully generate, this is the difference between a usable system and an unusable one. The persistent connection also eliminates per-request TLS and connection setup overhead, which matters because the system is conversational and chatty.
+
+### Individual pros (tied to quality attributes)
+
+- **Performance (perceived latency)** — Streamed chunks mean the user sees the first token within ~100ms, not after the full response is generated.
+- **Performance (throughput)** — No per-request connection overhead. One TLS handshake, then thousands of frames.
+- **Usability** — Real-time, conversational feel. Matches user expectations from modern chat applications.
+- **Functionality** — The Gateway can push unsolicited events (`event:presence`, `event:cron`, `event:health`) to clients without being polled, enabling features that would be awkward over HTTP.
+
+### Individual cons (tied to quality attributes)
+
+- **Availability** — Persistent connections are stateful. A Gateway restart drops every active connection at once, and clients must reconnect and re-authenticate. Rolling deployments are harder than for stateless HTTP services.
+- **Scalability** — Each connected spoke consumes one open file descriptor and some memory on the Gateway, indefinitely. A single Gateway instance has a hard ceiling on concurrent connections, regardless of how busy each one is.
+- **Integrability** — Many existing tools, services, and SDKs only speak HTTP. They cannot integrate directly; they need a WebSocket-aware adapter. This is the most-felt cost in practice.
+- **Testability** — WebSocket flows are harder to test than HTTP. Standard tools (curl, Postman, most load testers) don't natively support persistent bidirectional streams. CI tests need a WebSocket client harness.
+- **Debuggability** — A single connection carries many logical exchanges interleaved. Tracing one request end-to-end requires correlation IDs in every frame; a network capture alone is not enough.
+
+---
+
+## Decision D3 — Four-Part Functional Decomposition (Client, Gateway, Agent, Tools/Nodes)
+
+### The decision
+
+The system is decomposed into four functional roles, each with a single responsibility:
+
+- **Client** — presents the UI and forwards user input. Owns nothing else.
+- **Gateway** — routes, validates, and enforces protocol. Owns no business logic.
+- **Agent** — performs reasoning, holds session state, decides what to do. Owns no I/O to the outside world.
+- **Tools / Nodes** — execute actions on devices or external APIs. Own no reasoning or state.
+
+Each role can be replaced independently as long as it continues to honour the Gateway protocol.
+
+### Pattern implemented
+
+**Separation of concerns** with **information hiding** (Bass et al., Chapter 1, "Structural Rules of Thumb"). Each part hides what it does behind its protocol contract; the others depend on the contract, not the implementation.
+
+### Quality attribute addressed
+
+**Modifiability** (primary), **Reusability** (secondary), **Testability** (secondary).
+
+Because each role has one responsibility and a defined contract, the implementation behind that contract can be swapped without ripple effects. The LLM provider can change without touching the Client. The CLI can be replaced with a web app without touching the Agent. A new device-level tool can be added without touching anything except the Gateway's tool registry.
+
+### Individual pros (tied to quality attributes)
+
+- **Modifiability** — Swap the LLM, the UI, or any single tool independently. Each change is local.
+- **Reusability** — The Agent is reusable across every Client; the Tools are reusable across every Agent. There is no UI logic embedded in the Agent and no reasoning embedded in the Tools.
+- **Testability** — Each role can be tested in isolation against a mocked version of the protocol. The Agent can be tested without a real Client; the Gateway can be tested with a stub Agent.
+- **Team scalability** — Different team members can own different roles without stepping on each other, because the Gateway protocol is the contract between them.
+
+### Individual cons (tied to quality attributes)
+
+- **Performance** — Strict role separation means more hops per user action. A "take a screenshot and summarize it" request crosses Client → Gateway → Agent → Gateway → Node → Gateway → Agent → Gateway → Client. Every boundary adds serialization, validation, and routing cost.
+- **Complexity** — Four roles plus a protocol is more moving parts than a monolith. The conceptual overhead is real, especially for new contributors.
+- **Discipline cost** — The decomposition only delivers its modifiability benefit if every contributor respects the boundaries. If reasoning starts leaking into Tools or UI logic into the Agent, the benefit is lost and the complexity remains.
+
+---
+
+# The Protocol Rules
+
+Decision D2 commits the system to a specific transport contract. The teacher's comment correctly notes that this contract has consequences — both positive (every spoke speaks the same language) and negative (every spoke *must* speak that language). This section specifies the rules explicitly and is honest about what they cost.
+
+## Rule 1 — Frame envelope
+
+Every message exchanged over the WebSocket is a JSON object that conforms to one of three shapes:
+
+```
+Request        { "kind": "req:<name>",   "id": "<uuid>", "payload": { ... } }
+Response       { "kind": "res",          "id": "<uuid>", "status": "ok|accepted|error", "payload": { ... } }
+Event          { "kind": "event:<name>", "id": "<uuid>", "payload": { ... } }
+```
+
+The Gateway validates every inbound frame against a JSON Schema before routing it. Frames that fail validation are rejected with an error response and never reach the Agent or any Tool.
+
+**Why this rule exists:** schema validation at the boundary is a *security* and *modifiability* tactic. Spokes cannot send malformed input that breaks downstream components, and the schema itself is the documentation of the contract.
+
+## Rule 2 — Acknowledgment is not an answer
+
+A `res` with `status: "accepted"` means the Gateway received the request and queued it. It does not mean the request has been processed and it does not contain the answer. The answer arrives later as one or more `event:agent` frames, correlated by the original request `id`.
+
+**Why this rule exists:** this is what makes the system non-blocking. Long-running agent operations (LLM calls, tool execution) cannot be allowed to hold up the connection. Decoupling acknowledgment from completion is a *performance* tactic for the Gateway under load.
+
+## Rule 3 — Spokes never talk to each other
+
+If the Client needs the result of a Tool, the Client does not call the Tool. The Client sends a request to the Gateway; the Gateway routes it to the Agent; the Agent invokes the Tool through the Gateway; the result returns through the Gateway. There is no spoke-to-spoke shortcut, ever.
+
+**Why this rule exists:** this is the *integrity* of D1. Allowing exceptions would erase every modifiability benefit of the hub-and-spoke topology, because spokes would now have direct dependencies on each other.
+
+## Rule 4 — Agent-to-agent communication routes through the Gateway
+
+Agents do not hold direct references to other agents. If Agent A needs Agent B to do something, Agent A sends a request to the Gateway addressed to Agent B, exactly as a Client would. From the Gateway's perspective there is no special case for inter-agent traffic.
+
+**Why this rule exists:** treating agents as just another type of spoke means the same protocol, the same validation, the same logging, and the same security controls apply. Adding a new agent does not require changes to any other agent. This preserves *modifiability* and *observability* as the agent population grows.
+
+## Rule 5 — Third-party tool integration contract
+
+A third-party tool that wants to integrate with OpenClaw must:
+
+1. Open and maintain a WebSocket connection to the Gateway.
+2. Identify itself in the connect frame with `role: "tool"` and a unique tool name.
+3. Register the operations it supports (e.g. `weather.get`, `database.query`) so the Gateway and Agent know how to dispatch to it.
+4. Respond to incoming `req:<operation>` frames with a `res` envelope.
+5. Validate against the JSON Schema for every operation it claims to support.
+
+There is no second integration path. A tool that cannot or will not speak this protocol cannot integrate directly.
+
+**Why this rule exists:** one integration contract means one place to enforce security, schema, rate limiting, and observability — the Gateway. The cost of this rule is the subject of the next section.
+
+---
+
+# The Cost of the Protocol — and How Future Decisions Could Address It
+
+The protocol rules above are good for the system but they are not free. The teacher's comment specifically asks for an honest description of the negatives and what future architectural decisions could address them. The negatives below are the ones that matter most in practice.
+
+## Negative 1 — Many existing tools and services only speak HTTP
+
+The vast majority of public APIs, SDKs, and existing internal services use HTTP. They cannot integrate with OpenClaw directly under Rule 5. Every such integration today requires a custom WebSocket-aware wrapper, written and maintained by the OpenClaw team or by the third party.
+
+This is the largest practical cost of D2 + Rule 5 combined. It hurts *integrability* — the very quality attribute D1 was supposed to maximize.
+
+**Future architectural decision that could address this:** introduce an **HTTP-to-WebSocket adapter layer** as a first-class component. The adapter would be a long-lived WebSocket spoke (`role: "tool"`) that exposes an HTTP listener; for each registered HTTP service, it translates incoming HTTP responses into Gateway events and outbound Gateway requests into HTTP calls. This preserves the integrity of the protocol (Rule 3, Rule 5 still hold internally) while letting the system absorb the HTTP world without per-tool wrapper work.
+
+## Negative 2 — The Gateway is a single point of failure
+
+D1 centralizes all communication. If the Gateway process dies, every spoke loses its connection at the same moment, and the system is fully unavailable until the Gateway returns and every spoke reconnects.
+
+This is a direct *availability* cost.
+
+**Future architectural decision that could address this:** introduce **Gateway high availability** through an active-active cluster of Gateway instances behind a load balancer, with shared session state externalized to Redis (or equivalent). Spokes would still see one logical Gateway, but the failure of any single Gateway instance would only drop the connections held by that instance, not the entire fleet. This adds complexity (state externalization, sticky reconnection) but converts a system-wide outage into a partial, transient one.
+
+## Negative 3 — Per-request hop count is high
+
+Decision D3's strict role separation means every user action crosses multiple Gateway hops. For a simple "take a screenshot" request the path is Client → Gateway → Agent → Gateway → Node → Gateway → Agent → Gateway → Client — eight boundary crossings. Each crossing adds serialization, schema validation, and routing time.
+
+This is a *performance* cost that compounds as roles get more granular.
+
+**Future architectural decision that could address this:** introduce a **fast path for tightly coupled operations** — specifically, allow the Agent to declare a small set of "trusted tool calls" that the Gateway can dispatch synchronously, returning the tool result inline in the agent's processing context rather than as a separate event roundtrip. This is a controlled exception to Rule 3, scoped to operations the Agent owns end-to-end, and would need to be implemented carefully to avoid eroding D1's modifiability benefit.
+
+## Negative 4 — Stateful WebSocket connections complicate deployment
+
+Persistent connections from D2 mean that a Gateway deployment cannot just drain HTTP requests and exit cleanly. Every connection has to be migrated, drained, or dropped. Standard rolling-deployment tools (Kubernetes rolling updates, blue-green deployments) need extra care.
+
+This is an *operability* and *availability* cost.
+
+**Future architectural decision that could address this:** combine the Gateway HA cluster (above) with a **graceful connection migration protocol** — when a Gateway instance is about to be retired, it sends a `event:reconnect` frame to its connected spokes pointing them at a sibling instance, and only exits once they have moved. This makes deployments invisible to users.
+
+---
+
+# Summary — Decisions, Patterns, and Quality Attributes
+
+| Decision | Pattern | Primary QA Addressed | Largest QA Cost | Future Decision to Mitigate |
+|----------|---------|----------------------|-----------------|-----------------------------|
+| **D1** Hub-and-spoke with Gateway | Hub-and-Spoke + EDA | Modifiability, Integrability | Availability (Gateway is SPOF) | Gateway HA cluster |
+| **D2** Persistent WebSocket + JSON | Async messaging on duplex channel | Performance (perceived latency) | Integrability (HTTP tools can't connect directly) | HTTP-to-WebSocket adapter layer |
+| **D3** Four-part decomposition | Separation of concerns + information hiding | Modifiability, Reusability, Testability | Performance (high hop count) | Trusted-tool fast path for Agent-owned operations |
+
+These three decisions form the architectural skeleton of OpenClaw. Every later decision in the system either follows from them or is constrained by them, which is exactly what an early design decision is supposed to do (Bass et al., Chapter 2 — "The architecture is the carrier of the earliest, most fundamental, hardest-to-change design decisions").
