@@ -736,3 +736,6 @@ This is an *operability* and *availability* cost.
 | **D3** Four-part decomposition | Separation of concerns + information hiding | Modifiability, Reusability, Testability | Performance (high hop count) | Trusted-tool fast path for Agent-owned operations |
 
 These three decisions form the architectural skeleton of OpenClaw. Every later decision in the system either follows from them or is constrained by them, which is exactly what an early design decision is supposed to do (Bass et al., Chapter 2 — "The architecture is the carrier of the earliest, most fundamental, hardest-to-change design decisions").
+
+## Project Logs
+https://docs.google.com/spreadsheets/d/19eP-f9D0icTfOgCbX4RY3jcTt0ONy1vSKLz8U42olSo/edit?gid=0#gid=0
