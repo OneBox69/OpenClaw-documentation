@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw – Component Diagram</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #181c24;
+    --border: #2a2f3d;
+    --accent: #e85d2f;
+    --accent2: #3b82f6;
+    --accent3: #10b981;
+    --accent4: #f59e0b;
+    --accent5: #8b5cf6;
+    --accent6: #ec4899;
+    --text: #e8ecf4;
+    --muted: #6b7280;
+    --dim: #9ca3af;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    padding: 40px 32px;
+  }
+
+  header {
+    margin-bottom: 48px;
+    border-left: 3px solid var(--accent);
+    padding-left: 20px;
+  }
+
+  header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  header h1 {
+    font-size: clamp(22px, 4vw, 36px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  header p {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Diagram canvas ── */
+  .diagram {
+    display: grid;
+    grid-template-rows: auto auto auto;
+    gap: 0;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  /* Row labels */
+  .row { display: flex; align-items: stretch; gap: 0; }
+
+  /* ── GATEWAY ── */
+  .gateway-row { justify-content: center; margin-bottom: 0; }
+
+  .gateway {
+    width: 100%;
+    max-width: 860px;
+    background: linear-gradient(135deg, #1a1f2e 0%, #141925 100%);
+    border: 1.5px solid var(--accent);
+    border-radius: 12px;
+    padding: 28px 32px;
+    position: relative;
+    box-shadow: 0 0 40px rgba(232,93,47,0.12), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .gateway::before {
+    content: 'GATEWAY';
+    position: absolute;
+    top: -10px; left: 24px;
+    background: var(--bg);
+    padding: 0 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+  }
+
+  .gateway-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  .gateway-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .tag-orange { background: rgba(232,93,47,0.15); color: #f97316; border: 1px solid rgba(232,93,47,0.3); }
+  .tag-blue   { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+  .tag-green  { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+  .tag-purple { background: rgba(139,92,246,0.15); color: #a78bfa; border: 1px solid rgba(139,92,246,0.3); }
+  .tag-yellow { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+  .tag-pink   { background: rgba(236,72,153,0.15); color: #f472b6; border: 1px solid rgba(236,72,153,0.3); }
+
+  /* ── Arrow zone ── */
+  .arrows {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: 0;
+    max-width: 860px;
+    margin: 0 auto;
+    position: relative;
+    height: 60px;
+  }
+
+  .arrow-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .arrow-line {
+    width: 2px;
+    flex: 1;
+    background: var(--border);
+    position: relative;
+  }
+
+  .arrow-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    text-align: center;
+    white-space: nowrap;
+    margin: 4px 0;
+    letter-spacing: 0.05em;
+  }
+
+  .arrow-head {
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid var(--border);
+  }
+
+  /* Specific arrow colours */
+  .arr-ws .arrow-line  { background: var(--accent2); }
+  .arr-ws .arrow-head  { border-top-color: var(--accent2); }
+  .arr-ws .arrow-label { color: var(--accent2); }
+
+  .arr-node .arrow-line { background: var(--accent3); }
+  .arr-node .arrow-head { border-top-color: var(--accent3); }
+  .arr-node .arrow-label { color: var(--accent3); }
+
+  .arr-agent .arrow-line { background: var(--accent5); }
+  .arr-agent .arrow-head { border-top-color: var(--accent5); }
+  .arr-agent .arrow-label { color: var(--accent5); }
+
+  /* ── Middle row ── */
+  .mid-row {
+    display: flex;
+    gap: 20px;
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* ── Component boxes ── */
+  .comp {
+    flex: 1;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 18px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+
+  .comp:hover { border-color: var(--accent); }
+
+  .comp-badge {
+    position: absolute;
+    top: -9px; left: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    padding: 1px 8px;
+    border-radius: 3px;
+  }
+
+  .badge-blue   { background: var(--accent2); color: #0a0c10; }
+  .badge-green  { background: var(--accent3); color: #0a0c10; }
+  .badge-purple { background: var(--accent5); color: #fff; }
+  .badge-pink   { background: var(--accent6); color: #fff; }
+  .badge-yellow { background: var(--accent4); color: #0a0c10; }
+
+  .comp-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    margin-top: 4px;
+  }
+
+  .comp-desc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+
+  .comp-items {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .comp-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    padding-left: 12px;
+    position: relative;
+  }
+
+  .comp-item::before {
+    content: '›';
+    position: absolute;
+    left: 2px;
+    color: var(--accent);
+  }
+
+  /* ── Bottom arrows ── */
+  .bottom-arrows {
+    display: flex;
+    justify-content: center;
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+    height: 50px;
+  }
+
+  .bottom-arrow-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── Agent+Tool row ── */
+  .agent-row {
+    display: flex;
+    gap: 20px;
+    max-width: 860px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .agent-comp {
+    flex: 1;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 18px;
+    position: relative;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    max-width: 860px;
+    margin: 36px auto 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 18px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .legend-title {
+    width: 100%;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  .legend-line {
+    width: 28px;
+    height: 2px;
+    border-radius: 1px;
+  }
+
+  /* ── Events strip ── */
+  .events-strip {
+    max-width: 860px;
+    margin: 20px auto 0;
+    padding: 14px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .events-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    white-space: nowrap;
+  }
+
+  /* ── SVG connector overlay ── */
+  .connector-wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .mid-row, .agent-row { flex-direction: column; }
+    body { padding: 24px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="label">Member 2 · Software Architecture · Component Diagram</div>
+  <h1>OpenClaw — Core Logical Architecture</h1>
+  <p>Six-component breakdown: Gateway · Clients · Nodes · WebChat/Canvas · Agent/Session Layer · Tool Subsystem</p>
+</header>
+
+<!-- ══════════════ GATEWAY ══════════════ -->
+<div class="diagram">
+
+  <div class="gateway-row row">
+    <div class="gateway">
+      <div class="gateway-title">🔀 OpenClaw Gateway <span style="font-weight:400;font-size:13px;color:var(--muted);font-family:'JetBrains Mono',monospace;">(Central Control Plane · Node.js · ws://127.0.0.1:18789)</span></div>
+      <div class="gateway-features">
+        <span class="tag tag-orange">Provider Connections</span>
+        <span class="tag tag-blue">Typed WebSocket API</span>
+        <span class="tag tag-green">Session Routing</span>
+        <span class="tag tag-purple">JSON Schema Validation</span>
+        <span class="tag tag-yellow">Event Bus</span>
+        <span class="tag tag-pink">Device Pairing &amp; Auth</span>
+        <span class="tag tag-orange">Idempotency Cache</span>
+        <span class="tag tag-blue">Canvas HTTP Server</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Arrows down from Gateway ── -->
+  <div style="max-width:860px;margin:0 auto;width:100%;display:flex;height:56px;align-items:stretch;">
+    <!-- left third: WS to Clients -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:4px;">
+      <div style="width:2px;flex:1;background:#3b82f6;opacity:0.7;"></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#3b82f6;margin:3px 0;white-space:nowrap;">WS (operator)</div>
+      <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #3b82f6;opacity:0.8;"></div>
+    </div>
+    <!-- middle third: WS to Nodes -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:4px;">
+      <div style="width:2px;flex:1;background:#10b981;opacity:0.7;"></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#10b981;margin:3px 0;white-space:nowrap;">WS (role:node)</div>
+      <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #10b981;opacity:0.8;"></div>
+    </div>
+    <!-- right third: HTTP to WebChat -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:4px;">
+      <div style="width:2px;flex:1;background:#f59e0b;opacity:0.7;"></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#f59e0b;margin:3px 0;white-space:nowrap;">HTTP / WS (webchat)</div>
+      <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #f59e0b;opacity:0.8;"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════ MIDDLE ROW: Clients / Nodes / WebChat ══════════════ -->
+  <div class="mid-row">
+
+    <!-- CLIENTS -->
+    <div class="comp" style="border-color:rgba(59,130,246,0.4);">
+      <div class="comp-badge badge-blue">CLIENTS</div>
+      <div class="comp-title">Control Clients</div>
+      <div class="comp-desc">Operator interfaces that connect to the Gateway over WebSocket as role: operator.</div>
+      <div class="comp-items">
+        <div class="comp-item">macOS Menu Bar App</div>
+        <div class="comp-item">CLI (openclaw)</div>
+        <div class="comp-item">Control UI (Web Dashboard)</div>
+        <div class="comp-item">Automations / Scripts</div>
+      </div>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:5px;">
+        <span class="tag tag-blue" style="font-size:9px;">Token Auth</span>
+        <span class="tag tag-blue" style="font-size:9px;">Full RPC Access</span>
+      </div>
+    </div>
+
+    <!-- NODES -->
+    <div class="comp" style="border-color:rgba(16,185,129,0.4);">
+      <div class="comp-badge badge-green">NODES</div>
+      <div class="comp-title">Device Nodes</div>
+      <div class="comp-desc">Platform-native agents that connect with role: node and expose device-level commands.</div>
+      <div class="comp-items">
+        <div class="comp-item">macOS App (Menubar)</div>
+        <div class="comp-item">iOS App (SwiftUI)</div>
+        <div class="comp-item">Android App (Jetpack)</div>
+        <div class="comp-item">Headless Node</div>
+      </div>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:5px;">
+        <span class="tag tag-green" style="font-size:9px;">Device Pairing</span>
+        <span class="tag tag-green" style="font-size:9px;">caps + commands</span>
+      </div>
+    </div>
+
+    <!-- WEBCHAT / CANVAS -->
+    <div class="comp" style="border-color:rgba(245,158,11,0.4);">
+      <div class="comp-badge badge-yellow">WEBCHAT / CANVAS</div>
+      <div class="comp-title">WebChat &amp; Canvas Host</div>
+      <div class="comp-desc">Browser-based chat UI + agent-editable canvas. Served by the Gateway HTTP server.</div>
+      <div class="comp-items">
+        <div class="comp-item">/__openclaw__/canvas/</div>
+        <div class="comp-item">/__openclaw__/a2ui/</div>
+        <div class="comp-item">WebChat static UI</div>
+        <div class="comp-item">Voice Wake (ElevenLabs)</div>
+      </div>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:5px;">
+        <span class="tag tag-yellow" style="font-size:9px;">Port 18789</span>
+        <span class="tag tag-yellow" style="font-size:9px;">Restricted Methods</span>
+      </div>
+    </div>
+
+  </div><!-- /mid-row -->
+
+  <!-- ── Arrows down to Agent layer ── -->
+  <div style="max-width:860px;margin:0 auto;width:100%;display:flex;height:48px;align-items:stretch;">
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:4px;">
+      <div style="width:2px;flex:1;background:#8b5cf6;opacity:0.6;"></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8b5cf6;margin:3px 0;white-space:nowrap;">dispatch</div>
+      <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #8b5cf6;opacity:0.8;"></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:4px;">
+      <div style="width:2px;flex:1;background:#8b5cf6;opacity:0.6;"></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8b5cf6;margin:3px 0;white-space:nowrap;">node.invoke RPC</div>
+      <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #8b5cf6;opacity:0.8;"></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:4px;">
+      <div style="width:2px;flex:1;background:#8b5cf6;opacity:0.6;"></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#8b5cf6;margin:3px 0;white-space:nowrap;">agent RPC</div>
+      <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #8b5cf6;opacity:0.8;"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════ AGENT / SESSION + TOOL ══════════════ -->
+  <div class="agent-row">
+
+    <!-- AGENT / SESSION LAYER -->
+    <div class="agent-comp" style="flex:2;border-color:rgba(139,92,246,0.45);">
+      <div class="comp-badge badge-purple">AGENT / SESSION LAYER</div>
+      <div class="comp-title" style="margin-top:6px;">Agent Runtime &amp; Session Management</div>
+      <div class="comp-desc">The intelligence core. Each session is a keyed conversation context; the agent runs the full LLM loop within it.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--muted);letter-spacing:0.15em;margin-bottom:5px;">SESSION</div>
+          <div class="comp-item">sessionKey per conversation</div>
+          <div class="comp-item">History persisted to disk</div>
+          <div class="comp-item">Context hot-reloaded per turn</div>
+          <div class="comp-item">main / group / isolated types</div>
+        </div>
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--muted);letter-spacing:0.15em;margin-bottom:5px;">AGENT PIPELINE</div>
+          <div class="comp-item">Model selection</div>
+          <div class="comp-item">Prompt + memory assembly</div>
+          <div class="comp-item">LLM call (streaming)</div>
+          <div class="comp-item">Tool loop (invoke → result)</div>
+          <div class="comp-item">State persist (runEmbeddedPiAgent)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOOL SUBSYSTEM -->
+    <div class="agent-comp" style="flex:1;border-color:rgba(236,72,153,0.4);">
+      <div class="comp-badge badge-pink">TOOL SUBSYSTEM</div>
+      <div class="comp-title" style="margin-top:6px;">Tool Subsystem</div>
+      <div class="comp-desc">Policy-controlled functions the agent can invoke. Allow/deny cascade. Optional sandbox.</div>
+      <div class="comp-items" style="margin-top:10px;">
+        <div class="comp-item">Browser automation</div>
+        <div class="comp-item">File system ops</div>
+        <div class="comp-item">Shell execution</div>
+        <div class="comp-item">canvas.* / camera.*</div>
+        <div class="comp-item">screen.record</div>
+        <div class="comp-item">location.get</div>
+        <div class="comp-item">Scheduled jobs (cron)</div>
+        <div class="comp-item">Plugin / npm tools</div>
+      </div>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:5px;">
+        <span class="tag tag-pink" style="font-size:9px;">Docker sandbox</span>
+        <span class="tag tag-pink" style="font-size:9px;">Allow/Deny lists</span>
+      </div>
+    </div>
+
+  </div><!-- /agent-row -->
+
+</div><!-- /diagram -->
+
+<!-- ── Events strip ── -->
+<div class="events-strip">
+  <div class="events-label">GATEWAY EVENTS EMITTED →</div>
+  <span class="tag tag-orange">agent</span>
+  <span class="tag tag-blue">chat</span>
+  <span class="tag tag-green">presence</span>
+  <span class="tag tag-purple">health</span>
+  <span class="tag tag-yellow">heartbeat</span>
+  <span class="tag tag-pink">cron</span>
+</div>
+
+<!-- ── Legend ── -->
+<div class="legend">
+  <div class="legend-title">CONNECTION TYPES</div>
+  <div class="legend-item">
+    <div class="legend-line" style="background:#3b82f6;"></div>
+    WS operator connection (Clients → Gateway)
+  </div>
+  <div class="legend-item">
+    <div class="legend-line" style="background:#10b981;"></div>
+    WS node connection (Nodes → Gateway, role:node)
+  </div>
+  <div class="legend-item">
+    <div class="legend-line" style="background:#f59e0b;"></div>
+    HTTP + WS (WebChat/Canvas → Gateway)
+  </div>
+  <div class="legend-item">
+    <div class="legend-line" style="background:#8b5cf6;"></div>
+    RPC dispatch (Gateway → Agent/Session Layer)
+  </div>
+  <div class="legend-item">
+    <div class="legend-line" style="background:#ec4899;"></div>
+    Tool invocation (Agent → Tool Subsystem)
+  </div>
+</div>
+
+</body>
+</html>
